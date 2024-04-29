@@ -1046,6 +1046,66 @@ def doMonitor(key, secret, passphrase, flag):
         time.sleep(5)
 
 
+@log
+def monitor_once(key, secret, passphrase, flag):
+    print(key)
+    return
+    account = Account(key=key, secret=secret, passphrase=passphrase, flag=flag)
+    trade = Trade(key=key, secret=secret, passphrase=passphrase, flag=flag)
+
+    #获取当前持仓币种
+    swaps = getCurrentSwap(account)
+
+    print(swaps)
+
+    #获取当前持仓币种的资金费率
+    fundingRates = getCurrentPositionsFundingRates(swaps)
+
+    #获取折扣率 得到高风险低风险等级
+    discountRates = getSwapsDiscountRates(swaps)
+    judgeCcyRiskMonitor(discountRates)
+
+    print(discountRates)
+
+    trade_count = 0
+
+    while checkAdjEq(account) == False:
+    
+        ccy = ''
+        for i in swaps:
+            positions_info = account.get_positions(instId=i)
+            code = positions_info['code']
+            data = positions_info['data']
+
+            if len(data) == 0:
+                continue
+
+            pos = data[0]['pos']
+            if len(pos) == 0:
+                continue
+
+            if int(pos) == 0:
+                continue
+
+            ccy = getCcyStr(i)
+            break
+
+        if len(ccy) == 0:
+            print("[风控监控]进入平仓操作，却又没检测到币种。严重告警")
+            continue
+
+        #进入风控平仓流程
+        ticker = getClosePositionTicker(ccy, discountRates)
+        ret = doClosePositionTrade(account, trade, ccy, ticker)
+        if ret == 0:
+            print("[风控监控]平仓操作重试五次后仍失败。严重告警")
+        
+        #避免限频，交易10次后停5s
+        if trade_count == 10:
+            time.sleep(5)
+
+
+
 if __name__ == '__main__':
     print('====debug====')
     # getRecent10FundingRatesMax()

@@ -13,7 +13,7 @@ text = '邮件内容-测试'
 # SMTP服务器信息
 smtp_server = 'smtp.qq.com'
 port = 465
- 
+
 # 用于登录SMTP服务器的信息
 username = 'xxx@qq.com'
 # 登陆qq邮箱，在设置-账户-STMP位置生成16位授权码

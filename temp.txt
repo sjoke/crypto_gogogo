@@ -1,0 +1,8 @@
+[-h] [--debug] [--show-config] [--show-config-json] [--generate-config] [-y] [--allow-root] [--no-browser] [--autoreload] [--script]
+                   [--no-script] [--core-mode] [--dev-mode] [--skip-dev-build] [--splice-source] [--expose-app-in-browser] [--extensions-in-dev-mode]
+                   [--collaborative] [--custom-css] [--log-level ServerApp.log_level] [--config ServerApp.config_file] [--ip ServerApp.ip]
+                   [--port ServerApp.port] [--port-retries ServerApp.port_retries] [--sock ServerApp.sock] [--sock-mode ServerApp.sock_mode]
+                   [--transport KernelManager.transport] [--keyfile ServerApp.keyfile] [--certfile ServerApp.certfile] [--client-ca ServerApp.client_ca]
+                   [--notebook-dir ServerApp.root_dir] [--preferred-dir ServerApp.preferred_dir] [--browser ServerApp.browser] [--pylab ServerApp.pylab]
+                   [--gateway-url GatewayClient.url] [--watch [LabApp.watch]] [--app-dir LabApp.app_dir]
+                   [extra_args ...]
