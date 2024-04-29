@@ -35,6 +35,7 @@ def run():
 
 def main():
     while True:
+        print('start monitor')
         run()
         print('sleep 5s')
         time.sleep(5)
