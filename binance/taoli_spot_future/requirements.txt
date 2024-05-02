@@ -1,0 +1,6 @@
+binance-connector
+binance-futures-connector
+pandas
+tqdm
+argparse
+schedule

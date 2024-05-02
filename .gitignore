@@ -3,3 +3,8 @@ taoli/__pycache__
 taoli/.DS_Store
 .DS_Store
 ips.txt
+__pycache__
+*.csv
+*.log
+*.json
+*.zip

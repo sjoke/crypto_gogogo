@@ -1046,10 +1046,7 @@ def doMonitor(key, secret, passphrase, flag):
         time.sleep(5)
 
 
-@log
 def monitor_once(key, secret, passphrase, flag):
-    print(key)
-    return
     account = Account(key=key, secret=secret, passphrase=passphrase, flag=flag)
     trade = Trade(key=key, secret=secret, passphrase=passphrase, flag=flag)
 
