@@ -7,5 +7,13 @@
                    [--gateway-url GatewayClient.url] [--watch [LabApp.watch]] [--app-dir LabApp.app_dir]
                    [extra_args ...]
 
+pip3 install pip3 -U
+pip3 config set global.index-url https://mirrors.cloud.tencent.com/pypi/simple
+pip3 install -r requirements.txt
 
 nohup jupyter lab --ip 0.0.0.0 --allow-root &
+
+
+http://43.155.25.101:8888/login 
+密码 
+111@cmfchina

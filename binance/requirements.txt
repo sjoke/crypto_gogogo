@@ -1,0 +1,4 @@
+jupyterlab
+ipywidgets
+tqdm
+binance_interface

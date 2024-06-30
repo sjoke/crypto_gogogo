@@ -141,7 +141,7 @@ def showRecent10FundingRates(fundingRates):
     '''
 
     j = 0
-
+    print('展示top10合约对')
     print("-----------------------------------------------------------------------------------------------")
     print("|{:^20} {:^20} {:^20} {:^15} |".format('合约对', '平均值', '最新值', '24小时成交额'))#, 'HISTORY'))
     print("-----------------------------------------------------------------------------------------------")
@@ -1105,7 +1105,7 @@ def monitor_once(key, secret, passphrase, flag):
 
 if __name__ == '__main__':
     print('====debug====')
-    # getRecent10FundingRatesMax()
+    getRecent10FundingRatesMax()
     # getCurrentAccountFundingRatesFlow(KEY, SECRET, PASSPHRASE, FLAG)
     # doMonitor(KEY, SECRET, PASSPHRASE, FLAG)
     
