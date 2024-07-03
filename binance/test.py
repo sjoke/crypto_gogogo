@@ -5,5 +5,8 @@ secret = 'CIj5gL9aN8qe3DZHkh0fKaH3wNtOxmyA7HKQhf0RWcYZq0PXyG9AMVF6hW9RicbR'
 
 api = API(key, secret)
 
-res = api.query_wallet_balance()
+res = api.query_margin_balance()
 print(res)
+
+
+# BTCUSD_PERP
