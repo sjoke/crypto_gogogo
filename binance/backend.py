@@ -68,7 +68,7 @@ class API():
         for d in data:
             # BTC计价，不知道为什么
             balance = price * float(d['balance'])
-            lg.info('%s:%s', d['walletName'], balance)
+            # lg.info('%s:%s', d['walletName'], balance)
             if 'Funding' == d['walletName']:
                 funding_balance = balance
             elif '(PM)' in d['walletName']:
@@ -94,6 +94,7 @@ class API():
             else:
                 price = self.query_spot_price(get_spot_symbol(d['asset']))
                 total += price * amount
+        valid_assets = sorted(valid_assets, key=lambda x: -float(x['totalWalletBalance']))
         return total, valid_assets
     
     
