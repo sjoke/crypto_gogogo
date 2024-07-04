@@ -111,7 +111,8 @@ class API():
     # amount: 交易金额
     def spot_trade(self, symbol='BNBUSDT', amount=0, side='BUY'):
         # 获取最新价格
-        if amount <= 0:
+        if amount < 10:
+            lg.info('购买手续费不足10U,不购买')
             return
         price = self.query_spot_price(symbol)
         quantity = "{:.6f}".format(amount / price)
@@ -167,6 +168,7 @@ class API():
         if q is None:
             price = self.query_spot_price(symbol)
             q = "{:.8f}".format(amount / price)
+        lg.info('margin_trade: %s, %s, %s', symbol, side, q)
         res = self.pm_client.setOrder.set_margin_order(symbol=symbol, side=side, type='MARKET', quantity=q)
         data = check_resp(res)
         if len(data['symbol']) > 0 and data['orderId'] > 0:
