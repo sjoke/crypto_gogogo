@@ -2,3 +2,5 @@ jupyterlab
 ipywidgets
 tqdm
 binance_interface
+binance-connector
+binance-futures-connector
