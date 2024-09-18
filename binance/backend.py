@@ -1,6 +1,7 @@
 from binance_interface.api import SPOT  # 现货
 from binance_interface.api import Margin  # 杠杆
 from binance_interface.api import CM  # CM
+from binance_interface.api import UM  # UM
 from binance_interface.api import PM  # 统一账户
 from binance_interface.api import Other  # 其它
 from binance_interface.app.utils import eprint
@@ -50,6 +51,7 @@ class API():
             self.spot_client = SPOT(key, secret)
             self.margin_client = Margin(key, secret)
             self.cm_client = CM(key, secret)
+            self.um_client = UM(key, secret)
             self.pm_client = PM(key, secret)
             self.other_client = Other(key, secret)
     
@@ -144,20 +146,20 @@ class API():
         valid_assets = []
         for d in data:
             currency = d['asset']
-            free = float(d['totalWalletBalance'])
-            if abs(free) < MIN_POSITION:
+            freeBalance = float(d['totalWalletBalance']) + float(d['cmUnrealizedPNL'])
+            if abs(freeBalance) < MIN_POSITION:
                 continue
             valid_asset = {
                 'account_type': '统一账户',
                 'currency': d['asset'],
-                'balance': free
+                'balance': freeBalance,
             }
             if currency != CASH:
                 valid_asset['price'] = self.query_spot_price(get_spot_symbol(currency))
-                valid_asset['value'] = valid_asset['price'] * free
+                valid_asset['value'] = valid_asset['price'] * freeBalance
             else:
                 valid_asset['price'] = 1
-                valid_asset['value'] = free
+                valid_asset['value'] = freeBalance
             if valid_asset['value'] > 1:
                 valid_assets.append(valid_asset)
         valid_assets.sort(key=lambda x: -x['value'])
@@ -176,6 +178,7 @@ class API():
         with pd.option_context('display.max_rows', None,
                        'display.max_columns', None,
                        'display.precision', 2,
+                       'display.float_format', lambda x: '%.2f' % x,
                        ):
             print("-----账户持仓情况--------------")
             display(df)
@@ -192,9 +195,10 @@ class API():
         # 持仓量大于0的币种序列
         valid_assets = []
         for d in data:
-            if abs(float(d['totalWalletBalance'])) < MIN_POSITION:
-                continue
             currency = d['asset']
+            freeBalance = float(d['totalWalletBalance']) + float(d['cmUnrealizedPNL'])
+            if abs(freeBalance) < MIN_POSITION:
+                continue
             if CASH != d['asset']:
                 # {
                 #     'currency': currency,
@@ -212,13 +216,17 @@ class API():
         valid_assets.sort(key=lambda x: -x['净资产价值/U'])
         return valid_assets
     
-
-    # 查询账户资产及持仓
+    # 对应refresh刷新操作
+    # 1、查询账户资产及持仓
     def query_account_asset(self):
         # 查询各种账户总资产
         self.query_wallet_balance()
         # 查询统一账户持仓
         self.get_all_position()
+        lg.info('---统一账户资金归集---')
+        resp = self.pm_client.account.set_auto_collection()
+        check_resp(resp)
+
     
     
     # 查询某个币在统一账户的中的余额
@@ -253,7 +261,32 @@ class API():
             if pos['symbol'] == symbol:
                 amt += int(pos['positionAmt'])
         return amt
-                
+
+    # 开仓基差=(合约买一价-杠杆卖一价)/杠杆卖一价；
+    # bids是 卖价，asks是买价 
+    def query_jicha_open(self, cm_symbol, spot_symbol):
+        resp = self.cm_client.market.get_depth(cm_symbol, 5)
+        data = check_resp(resp)
+        price_buy = float(data['asks'][0][0])
+        resp = self.spot_client.market.get_depth(spot_symbol, 5)
+        data = check_resp(resp)
+        price_sell = float(data['bids'][0][0])
+        jicha = (price_buy - price_sell) / price_sell
+        lg.info('币种: %s, 合约买一价: %s, 杠杆卖一价: %s, 基差: %.6f', spot_symbol, price_buy, price_sell, jicha)
+        return jicha
+    
+    # 平仓基差=(杠杆买一价-合约卖一价)/合约卖一价
+    # bids是 卖价，asks是买价 
+    def query_jicha_close(self, cm_symbol, spot_symbol):
+        resp = self.cm_client.market.get_depth(cm_symbol, 5)
+        data = check_resp(resp)
+        price_sell = float(data['bids'][0][0])
+        resp = self.spot_client.market.get_depth(spot_symbol, 5)
+        data = check_resp(resp)
+        price_buy = float(data['asks'][0][0])
+        jicha = (price_buy - price_sell) / price_sell
+        lg.info('币种: %s, 杠杆买一价: %s, 合约卖一价: %s, 基差: %.6f', spot_symbol, price_buy, price_sell, jicha)
+        return jicha
 
 
     # 购买BNB，充当手续费
@@ -311,8 +344,10 @@ class API():
     # 界面操作
     def cm_trade_op(self, currency, side, quantity=0, amount=0):
         lg.info("%s %s SHORT %s张, %sU", currency, side, quantity, amount)
+        # 设置5倍杠杆
+        cm_symbol = get_cm_perp_symbol(currency)
+        self.pm_client.account.set_cm_leverage(cm_symbol, leverage=5)
         if quantity == 0 and amount > 0:
-            cm_symbol = get_cm_perp_symbol(currency)
             quantity = int(amount / self.cm_perp_info[cm_symbol]['contractSize'])
         return self.cm_trade(currency, side, quantity)
     
@@ -416,14 +451,19 @@ class API():
         cm_symbol = get_cm_perp_symbol(currency)
         spot_symbol = get_spot_symbol(currency)
         # 合约每张单价
-        contract_size = self.cm_perp_info[cm_symbol]['contractSize']
+        if cm_symbol not in self.cm_perp_info:
+            lg.warning('cm_symbol[%s]未查到合约单价,给默认值10U', cm_symbol)
+            contract_size = 10
+        else:
+            contract_size = self.cm_perp_info[cm_symbol]['contractSize']
         # 持有张数
         amt = self.query_pm_cm_position_amt(cm_symbol)
         money1 = abs(contract_size * amt)
         # lg.info('%s, CM合约张数: %s, 合约单价: %.1f, 持仓金额: %.8f', currency, amt, contract_size, money1)
 
         # 统一账户净资产
-        balance = float(self.query_pm_balance(currency)['totalWalletBalance'])
+        d = self.query_pm_balance(currency)
+        balance = float(d['totalWalletBalance']) + float(d['cmUnrealizedPNL'])
         # 现货价格
         price = self.query_spot_price(spot_symbol)
         money2 = abs(balance * price)
@@ -452,17 +492,26 @@ class API():
     
     
     # 开仓流程
+    # currency为BTC, symbol为BTCUSDT
     # amount为U
     # 合约sell short， 杠杆buy
-    def open(self, currency, amount):
+    def open(self, currency, amount, jicha=0):
         cnt = math.floor(amount / self.amount_unit)
-        lg.info('%s开仓%sU,将分%s次开仓,每次%sU,不足部分不开仓', currency, amount, cnt, self.amount_unit)
+        lg.info('%s开仓%sU,将分%s次开仓,每次%sU,不足部分不开仓, **基差:%.6f**', currency, amount, cnt, self.amount_unit, jicha)
         if 0.00075*amount > 5:
             lg.info('----买入BNB, %s U----', 0.00075*amount)
             self.margin_trade(symbol='BNBUSDT', amount=0.00075*amount)
 
+        # 设置5倍杠杆
+        cm_symbol = get_cm_perp_symbol(currency)
+        spot_symbol = get_spot_symbol(currency)
+        self.pm_client.account.set_cm_leverage(cm_symbol, leverage=5)
+
         for i in range(cnt):
             lg.info('开仓%sU 第%s/%s轮', self.amount_unit, i+1, cnt)
+            while self.query_jicha_open(cm_symbol, spot_symbol) < jicha:
+                time.sleep(1)
+                
             res = self.open_once(currency, self.amount_unit)
             if res > 0:
                 lg.error('****开仓有异常, 请查看日志****')
@@ -477,7 +526,8 @@ class API():
     # 平仓流程
     # currency: BTC
     # amount为具体金额时平仓这么多钱，amount为None时清仓
-    def close(self, currency, amount=None):
+    def close(self, currency, amount=None, jicha=0):
+        lg.info('%s平仓%sU, **基差:%.6f**', currency, amount, jicha)
         if not self.check_pos_balance(currency):
             lg.error("仓位不平衡，请先排查")
             return 2
@@ -485,6 +535,7 @@ class API():
         lg.info('----------平仓: %s, 不足%sU部分会一次清仓----------', currency, balance_min)
         crossMarginFree = float(self.query_pm_balance(currency)['crossMarginFree'])
         spot_symbol = get_spot_symbol(currency)
+        cm_symbol = get_cm_perp_symbol(currency)
         price = self.query_spot_price(spot_symbol)
         balance = abs(crossMarginFree * price)
         
@@ -500,6 +551,8 @@ class API():
         loop = math.floor(amount / self.amount_unit)
         for i in range(loop):
             lg.info('平仓%sU 第%s/%s轮', self.amount_unit, i+1, loop)
+            while self.query_jicha_close(cm_symbol, spot_symbol) < jicha:
+                time.sleep(1)
             self.clear_once(currency, self.amount_unit)
             if not self.check_pos_balance(currency):
                 lg.error('----------交易异常,请排查----------')
